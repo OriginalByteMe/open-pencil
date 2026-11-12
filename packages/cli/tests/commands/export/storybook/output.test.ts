@@ -8,6 +8,8 @@ import { runCLI } from '#cli-tests/helpers/run'
 
 import { BUILTIN_IO_FORMATS, IORegistry } from '@open-pencil/core/io'
 import { makeSceneGraph } from '@open-pencil/test-support/scene' /** A Storybook export without font files, which come from the network these tests leave out. */
+
+import { loadDocument } from '#cli/headless'
 const STORYBOOK_EXPORT = ['--format', 'storybook', '--fonts', 'none']
 
 /** Static stories, whose files and design images most of these tests manage. */
@@ -181,6 +183,27 @@ test('export CLI --page replaces that page and keeps the stories of other pages'
   expect(exitCode).toBe(0)
   expect(await Bun.file(join(output, 'Kept.stories.ts')).exists()).toBe(true)
   expect(await Bun.file(join(output, 'New.stories.ts')).exists()).toBe(true)
+})
+
+test('export CLI refuses to export one of two pages that share a name on its own', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'open-pencil-storybook-cli-'))
+  const figPath = join(dir, 'library.fig')
+  const graph = makeSceneGraph()
+  for (const name of ['Card', 'Chip'])
+    graph.createNode('COMPONENT', graph.addPage('Kit').id, { name, width: 8, height: 8 })
+  await Bun.write(figPath, (await io.writeDocument('fig', graph)).data as Uint8Array)
+  const kits = (await loadDocument(figPath)).getPages().filter((page) => page.name === 'Kit')
+  expect(kits).toHaveLength(2)
+  const output = join(dir, 'stories')
+  const args = [...STORYBOOK, '--no-design-images', '--output', output]
+
+  // A page's stories are kept apart by its name, so the second Kit would replace the first's.
+  for (const page of kits) {
+    const { exitCode, stderr } = await runCLI(['export', figPath, '--page-id', page.id, ...args])
+    expect(exitCode).toBe(1)
+    expect(stderr).toContain('Another page is named "Kit"')
+  }
+  expect(await Bun.file(output).exists()).toBe(false)
 })
 
 test('export CLI tells apart documents that share a file name', async () => {

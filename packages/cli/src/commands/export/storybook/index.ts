@@ -158,6 +158,12 @@ async function writeStories(
   const graph = await loadDocument(file)
   const requested = requestedPage(args)
   const page = requested ? requirePage(graph, requested) : undefined
+  // The manifest keeps a page's stories apart by its name, so exporting one of two pages that
+  // share it would replace the other's stories.
+  if (page && graph.getPages().some((other) => other.id !== page.id && other.name === page.name))
+    throw new Error(
+      `Another page is named "${page.name}"; rename one to export either page's stories alone.`
+    )
   const pageId = page?.id
   populateWholeDocument(graph)
   if (args['design-images']) {
