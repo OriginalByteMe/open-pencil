@@ -139,9 +139,25 @@ export async function writeFigDocument(graph: SceneGraph, filePath: string): Pro
   await writeFileAtomic(filePath, result.data, { symlink: 'follow' })
 }
 
-/** Loads a page not loaded yet with the fonts its text uses, as the editor prepares a page. */
-export async function loadDocumentPage(graph: SceneGraph, pageId: string): Promise<void> {
-  if (populateDocumentPage(graph, pageId)) await prepareGraphFonts(graph, [pageId])
+const pageLoads = new WeakMap<SceneGraph, Map<string, Promise<void>>>()
+
+/**
+ * Loads a page not loaded yet with the fonts its text uses, then lays it out, as the editor
+ * prepares a page. A page asked for again while it loads is ready when the first load is.
+ */
+export function loadDocumentPage(graph: SceneGraph, pageId: string): Promise<void> {
+  const loads = pageLoads.get(graph) ?? new Map<string, Promise<void>>()
+  pageLoads.set(graph, loads)
+  let load = loads.get(pageId)
+  if (!load) {
+    load = populateFigPage(graph, pageId)
+      ? prepareGraphFonts(graph, [pageId]).then(() =>
+          graph.applyDerivedLayoutDuring(() => computeAllLayouts(graph, pageId))
+        )
+      : Promise.resolve()
+    loads.set(pageId, load)
+  }
+  return load
 }
 
 export function populateDocumentPage(graph: SceneGraph, pageId: string): boolean {

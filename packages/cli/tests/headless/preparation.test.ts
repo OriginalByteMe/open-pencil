@@ -8,10 +8,12 @@ import { SceneGraph } from '@open-pencil/scene-graph'
 
 import {
   loadDocument,
+  loadDocumentPage,
   populateNodePage,
   populateWholeDocument,
   prepareDocumentForRPC
 } from '#cli/headless'
+import { createHeadlessFigma } from '#cli/tool-data'
 
 const io = new IORegistry(BUILTIN_IO_FORMATS)
 
@@ -118,5 +120,25 @@ describe('headless CLI lazy .fig preparation', () => {
     await populateNodePage(graph, insideInstance)
 
     expect(graph.getNode(insideInstance)?.name).toBe('Background')
+  })
+
+  test('finds a layer inside an instance on a page not loaded yet, as a script asks for it', async () => {
+    const path = await writeLazyFixture()
+    const { insideInstance } = await page3LayerIds(path)
+    const figma = await createHeadlessFigma(await loadDocument(path))
+
+    expect((await figma.getNodeByIdAsync(insideInstance))?.name).toBe('Background')
+  })
+
+  test('a page asked for twice at once is ready for both callers', async () => {
+    const graph = await createLazyFixture()
+    const page2 = graph.getPages()[1].id
+    let firstDone = false
+    const first = loadDocumentPage(graph, page2).then(() => (firstDone = true))
+
+    await loadDocumentPage(graph, page2)
+
+    expect(firstDone).toBe(true)
+    await first
   })
 })
