@@ -29,7 +29,14 @@ import {
 export async function createHeadlessFigma(graph: SceneGraph): Promise<FigmaAPI> {
   const figma = new FigmaAPI(graph, {
     loadPage: (id) => loadDocumentPage(graph, id),
-    pageOfNode: (id) => pendingFigPageOfNode(graph, id)
+    pageOfNode: async (id) => {
+      const pageId = await pendingFigPageOfNode(graph, id)
+      if (pageId || graph.getNode(id)) return pageId
+      // A layer with no record of its own, such as one inside an instance, is on no page the
+      // archive knows of, and turns up once every page is loaded.
+      for (const page of graph.getPages()) await loadDocumentPage(graph, page.id)
+      return graph.pageOf(id)
+    }
   })
   const renderer = await measureTextHeadlessly()
   // The process's one renderer keeps paths by layer id, which another document's layers share.
