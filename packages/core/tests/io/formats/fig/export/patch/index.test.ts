@@ -443,6 +443,19 @@ describe('writing an edited document into its archive', () => {
     })
   })
 
+  test('takes a removed variable off layers on pages not opened yet, written either way', async () => {
+    const { patched, full } = await exportBothWays((graph) => {
+      const [variable] = graph.variables.values()
+      graph.removeVariable(variable.id)
+    })
+    for (const saved of [patched, full]) {
+      const reopened = await open(saved)
+      populateAllFigPages(reopened)
+      expect(reopened.variables.size).toBe(0)
+      expect(layerNamed(reopened, 'Branded').boundVariables).toEqual({})
+    }
+  })
+
   test('rewrites instances on unopened pages when their component loses a layer', async () => {
     const bytes = await fixtureBytes()
     const graph = await open(bytes)

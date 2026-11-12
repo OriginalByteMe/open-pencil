@@ -1,2 +1,3 @@
 - `openpencil tree`, `find`, and `query` with `--page-id` read that page of the running app instead of ignoring it.
 - `openpencil find` and `query` on a file report a page the document lacks as an error, as `tree` does, instead of finding nothing.
+- Saving a `.fig` after removing a variable takes it off layers on pages not opened yet too, instead of writing a file that names a variable it no longer holds.

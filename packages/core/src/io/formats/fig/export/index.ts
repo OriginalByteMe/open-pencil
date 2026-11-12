@@ -13,8 +13,10 @@ import type { GUID } from '@open-pencil/scene-graph/primitives'
 
 import { figCompressionLevel } from '#core/io/formats/fig/compression'
 import { cloneSceneGraphForFigExport } from '#core/kiwi/fig/parse/transfer'
+import { archiveBaseline } from '#core/kiwi/fig/session/archive/changes'
 import {
   hasPendingReaderPages,
+  populateAllFigPages,
   populateFigInternalPages,
   populateReaderExport
 } from '#core/kiwi/fig/session/document-state'
@@ -100,6 +102,24 @@ function appendInternalResources(context: InternalResourceContext): void {
 }
 
 /**
+ * Removing a variable unbinds it from the layers in the document, but layers on pages not loaded
+ * yet still bind it, and a file that names a variable it no longer holds does not open. Those
+ * pages load and the removal reaches their layers too, as it would have had they been loaded.
+ */
+function unbindRemovedVariables(graph: SceneGraph): void {
+  const removed = [...(archiveBaseline(graph)?.variables.values() ?? [])].filter(
+    (variable) => !graph.variables.has(variable.id)
+  )
+  if (removed.length === 0 || !hasPendingReaderPages(graph)) return
+  populateAllFigPages(graph)
+  populateFigInternalPages(graph)
+  for (const variable of removed) {
+    graph.addVariable(variable)
+    graph.removeVariable(variable.id)
+  }
+}
+
+/**
  * `sourceGraph` as a `.fig`, written as the stream's reader asks for it. A document opened from an
  * archive and left unchanged is that archive, with only its `meta.json` renamed when
  * `documentName` differs from the name it records; a changed one is that archive with its changed
@@ -110,6 +130,7 @@ export async function exportFigFileStream(
   sourceGraph: SceneGraph,
   options: FigFileExtrasOptions = {}
 ): Promise<ReadableStream<Uint8Array>> {
+  unbindRemovedVariables(sourceGraph)
   // An archive whose images Figma cannot read is written whole rather than reused.
   const reuseArchive = await archiveImagesNamedForFigma(sourceGraph)
   const originalArchive = reuseArchive ? await originalFigArchive(sourceGraph) : null
